@@ -16,7 +16,7 @@ export default function StickyNotesZoomDemo() {
         zoomIn: () => { },
         zoomOut: () => { }
     });
-    const MIN_ZOOM = 0.05;
+    const MIN_ZOOM = 0.01;
     const MAX_ZOOM = 6;
     // スライダー↔スケールの指数マッピング
     const scaleToSlider = (s: number) => {
@@ -61,11 +61,11 @@ export default function StickyNotesZoomDemo() {
                 const tempNotes = data.arguments.map((arg, index) => {
                     const rawX = (arg.x - minX) * POSITION_SCALE;
                     const rawY = (arg.y - minY) * POSITION_SCALE;
-                    
+
                     // 格子点にスナップ
                     const gridX = Math.floor(rawX / NOTE_SIZE);
                     const gridY = Math.floor(rawY / NOTE_SIZE);
-                    
+
                     const hue = (index * 137.5) % 360; // ゴールデンアングルで色分散
                     const color = `hsl(${hue} 70% 80%)`;
 
@@ -89,18 +89,18 @@ export default function StickyNotesZoomDemo() {
                 for (const note of tempNotes) {
                     let finalGridX = note.gridX;
                     let finalGridY = note.gridY;
-                    
+
                     // 螺旋状に近い空きグリッドを探す
                     let found = false;
                     for (let radius = 0; radius < 20 && !found; radius++) {
                         for (let dx = -radius; dx <= radius && !found; dx++) {
                             for (let dy = -radius; dy <= radius && !found; dy++) {
                                 if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
-                                
+
                                 const testX = note.originalGridX + dx;
                                 const testY = note.originalGridY + dy;
                                 const key = `${testX},${testY}`;
-                                
+
                                 if (!occupiedGrids.has(key)) {
                                     finalGridX = testX;
                                     finalGridY = testY;
@@ -303,81 +303,89 @@ export default function StickyNotesZoomDemo() {
             // World変換
             ctx.setTransform(scale * dpr, 0, 0, scale * dpr, tx * dpr, ty * dpr);
 
-            // LOD判定（付箋のスクリーン上幅で目安）
+            // テキスト表示判定（付箋のスクリーン上幅で判定）
             const screenNoteW = NOTE_SIZE * scale;
-            // LOD0: とても遠い（点）  LOD1: 小矩形  LOD2: 角丸  LOD3: 角丸+影+テキスト
-            let lod = 0;
-            // if (screenNoteW < 6) lod = 0; else if (screenNoteW < 24) lod = 1; else if (screenNoteW < 110) lod = 2; else lod = 3;
-            lod = 1;
+            const showText = screenNoteW >= 40; // 40px以上でテキスト表示
 
             let visibleCount = 0;
 
-            if (lod === 0) {
-                // 点描画（超遠景・速い）
-                ctx.fillStyle = "#cfcfcf";
-                ctx.beginPath();
-                for (const n of notes) {
-                    if (n.x > viewR || n.x + n.w < viewL || n.y > viewB || n.y + n.h < viewT) continue;
-                    visibleCount++;
-                    ctx.rect(n.x + NOTE_SIZE * 0.5, n.y + NOTE_SIZE * 0.5, 1 / scale, 1 / scale);
-                }
-                ctx.fill();
-            } else if (lod === 1) {
-                // 小さな塗り矩形（影なし・高速）
-                for (const n of notes) {
-                    if (n.x > viewR || n.x + n.w < viewL || n.y > viewB || n.y + n.h < viewT) continue;
-                    visibleCount++;
-                    ctx.fillStyle = n.color;
-                    ctx.fillRect(n.x, n.y, n.w, n.h);
-                }
-            } else {
-                // 角丸（LOD2/3）
-                const radius = 12;
-                for (const n of notes) {
-                    if (n.x > viewR || n.x + n.w < viewL || n.y > viewB || n.y + n.h < viewT) continue;
-                    visibleCount++;
-                    if (lod === 3) {
-                        ctx.shadowColor = "rgba(0,0,0,0.15)";
-                        ctx.shadowBlur = 8;
-                        ctx.shadowOffsetY = 4;
-                    } else {
-                        ctx.shadowColor = "transparent";
-                        ctx.shadowBlur = 0;
-                        ctx.shadowOffsetY = 0;
-                    }
-                    roundedRectPath(ctx, n.x, n.y, n.w, n.h, radius);
-                    ctx.fillStyle = n.color;
-                    ctx.fill();
+            // 矩形 + 条件付きテキスト表示
+            for (const n of notes) {
+                if (n.x > viewR || n.x + n.w < viewL || n.y > viewB || n.y + n.h < viewT) continue;
+                visibleCount++;
+                
+                // 背景矩形
+                ctx.fillStyle = n.color;
+                ctx.fillRect(n.x, n.y, n.w, n.h);
+                
+                if (showText) {
+                    // テキスト表示（複数行対応）
+                    const pad = 8;
+                    ctx.fillStyle = "#3a3a3a";
+                    const fontPx = 12;
+                    const lineHeight = fontPx * 1.2;
+                    ctx.font = `${fontPx}px ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto`;
+                    ctx.textBaseline = "top";
+                    const maxW = n.w - pad * 2;
+                    const maxH = n.h - pad * 2;
+                    const maxLines = Math.floor(maxH / lineHeight);
 
-                    // 折り返し（付箋っぽい角）
-                    if (lod >= 2) {
-                        const fold = Math.min(18, n.w * 0.12);
-                        ctx.beginPath();
-                        ctx.moveTo(n.x + n.w - fold, n.y);
-                        ctx.lineTo(n.x + n.w, n.y);
-                        ctx.lineTo(n.x + n.w, n.y + fold);
-                        ctx.closePath();
-                        ctx.fillStyle = "rgba(255,255,255,0.75)";
-                        ctx.fill();
-                    }
+                    if (maxLines > 0) {
+                        const words = n.text.split(/\s+/);
+                        const lines: string[] = [];
+                        let currentLine = "";
 
-                    if (lod === 3) {
-                        // テキスト（先頭行のみ）
-                        const pad = 14;
-                        ctx.shadowColor = "transparent";
-                        ctx.fillStyle = "#3a3a3a";
-                        const fontPx = 14;
-                        ctx.font = `${fontPx}px ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto`;
-                        ctx.textBaseline = "top";
-                        const maxW = n.w - pad * 2;
-                        // 先頭行を切り詰め
-                        let line = n.text;
-                        while (ctx.measureText(line).width > maxW) {
-                            line = line.slice(0, Math.max(0, line.length - 4));
-                            if (line.length <= 4) break;
+                        for (const word of words) {
+                            const testLine = currentLine ? currentLine + " " + word : word;
+                            const testWidth = ctx.measureText(testLine).width;
+
+                            if (testWidth <= maxW) {
+                                currentLine = testLine;
+                            } else {
+                                if (currentLine) {
+                                    lines.push(currentLine);
+                                    currentLine = word;
+                                } else {
+                                    // 単語が1行に入らない場合は文字単位で分割
+                                    let charLine = "";
+                                    for (const char of word) {
+                                        const testChar = charLine + char;
+                                        if (ctx.measureText(testChar).width <= maxW) {
+                                            charLine = testChar;
+                                        } else {
+                                            if (charLine) {
+                                                lines.push(charLine);
+                                                charLine = char;
+                                            } else {
+                                                lines.push(char);
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    currentLine = charLine;
+                                }
+                            }
+
+                            if (lines.length >= maxLines) break;
                         }
-                        if (line !== n.text) line = line.slice(0, Math.max(0, line.length - 1)) + "…";
-                        ctx.fillText(line, n.x + pad, n.y + pad);
+
+                        if (currentLine && lines.length < maxLines) {
+                            lines.push(currentLine);
+                        }
+
+                        // 最後の行が省略される場合は「…」を追加
+                        if (lines.length === maxLines && (lines.join(" ").length < n.text.length)) {
+                            let lastLine = lines[lines.length - 1];
+                            while (ctx.measureText(lastLine + "…").width > maxW && lastLine.length > 0) {
+                                lastLine = lastLine.slice(0, -1);
+                            }
+                            lines[lines.length - 1] = lastLine + "…";
+                        }
+
+                        // 各行を描画
+                        for (let i = 0; i < lines.length; i++) {
+                            ctx.fillText(lines[i], n.x + pad, n.y + pad + i * lineHeight);
+                        }
                     }
                 }
             }
