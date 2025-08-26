@@ -57,31 +57,83 @@ export default function StickyNotesZoomDemo() {
                 const minY = Math.min(...data.arguments.map(arg => arg.y));
                 const maxY = Math.max(...data.arguments.map(arg => arg.y));
 
-                data.arguments.forEach((arg, index) => {
+                // まず全ての付箋の初期格子位置を計算
+                const tempNotes = data.arguments.map((arg, index) => {
                     const rawX = (arg.x - minX) * POSITION_SCALE;
                     const rawY = (arg.y - minY) * POSITION_SCALE;
-
+                    
                     // 格子点にスナップ
                     const gridX = Math.floor(rawX / NOTE_SIZE);
                     const gridY = Math.floor(rawY / NOTE_SIZE);
-                    const x = gridX * NOTE_SIZE;
-                    const y = gridY * NOTE_SIZE;
-
+                    
                     const hue = (index * 137.5) % 360; // ゴールデンアングルで色分散
                     const color = `hsl(${hue} 70% 80%)`;
 
-                    notes.push({
+                    return {
                         id: arg.arg_id,
+                        originalGridX: gridX,
+                        originalGridY: gridY,
+                        gridX,
+                        gridY,
+                        w: NOTE_SIZE,
+                        h: NOTE_SIZE,
+                        color,
+                        text: arg.argument
+                    };
+                });
+
+                // 格子点の重複を解決
+                const occupiedGrids = new Set<string>();
+                const distributedNotes = [];
+
+                for (const note of tempNotes) {
+                    let finalGridX = note.gridX;
+                    let finalGridY = note.gridY;
+                    
+                    // 螺旋状に近い空きグリッドを探す
+                    let found = false;
+                    for (let radius = 0; radius < 20 && !found; radius++) {
+                        for (let dx = -radius; dx <= radius && !found; dx++) {
+                            for (let dy = -radius; dy <= radius && !found; dy++) {
+                                if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
+                                
+                                const testX = note.originalGridX + dx;
+                                const testY = note.originalGridY + dy;
+                                const key = `${testX},${testY}`;
+                                
+                                if (!occupiedGrids.has(key)) {
+                                    finalGridX = testX;
+                                    finalGridY = testY;
+                                    occupiedGrids.add(key);
+                                    found = true;
+                                }
+                            }
+                        }
+                    }
+
+                    if (!found) {
+                        // 空きが見つからない場合は元の位置を使用
+                        const key = `${note.gridX},${note.gridY}`;
+                        occupiedGrids.add(key);
+                    }
+
+                    const x = finalGridX * NOTE_SIZE;
+                    const y = finalGridY * NOTE_SIZE;
+
+                    distributedNotes.push({
+                        id: note.id,
                         x,
                         y,
                         w: NOTE_SIZE,
-                        h: NOTE_SIZE, // 正方形
-                        color,
-                        text: arg.argument,
-                        gridX,
-                        gridY
+                        h: NOTE_SIZE,
+                        color: note.color,
+                        text: note.text,
+                        gridX: finalGridX,
+                        gridY: finalGridY
                     });
-                });
+                }
+
+                notes.push(...distributedNotes);
 
                 WORLD_W = (maxX - minX) * POSITION_SCALE + NOTE_SIZE * 2;
                 WORLD_H = (maxY - minY) * POSITION_SCALE + NOTE_SIZE * 2;
