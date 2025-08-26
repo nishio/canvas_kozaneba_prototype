@@ -448,26 +448,31 @@ export default function StickyNotesZoomDemo() {
     return (
         <div className="w-full h-[80vh] relative bg-white">
             <canvas ref={canvasRef} className="block w-full h-full" />
-            {/* Google Map的ズームコントローラ */}
+            {/* ズームコントローラ */}
             <div className="absolute right-3 top-3 z-10 pointer-events-auto">
-                <div className="flex flex-col items-center gap-2 bg-white/80 backdrop-blur rounded-xl shadow p-2">
-                    <button type="button" aria-label="ズームイン" onClick={() => controlsRef.current.zoomIn()} className="w-8 h-8 rounded-lg border border-gray-300 hover:bg-gray-100 active:scale-95">+</button>
-                    <input
-                        type="range"
-                        min={0}
-                        max={100}
-                        step={1}
-                        value={scaleToSlider(info.zoom)}
-                        onChange={(e) => controlsRef.current.setZoomCenter(sliderToScale(e.target.value))}
-                        className="w-40 h-4 -rotate-90 origin-center"
-                    />
-                    <button type="button" aria-label="ズームアウト" onClick={() => controlsRef.current.zoomOut()} className="w-8 h-8 rounded-lg border border-gray-300 hover:bg-gray-100 active:scale-95">-</button>
+                <div className="flex flex-col items-center gap-1 bg-white/90 backdrop-blur rounded-lg shadow-lg p-1">
+                    <button 
+                        type="button" 
+                        aria-label="ズームイン" 
+                        onClick={() => controlsRef.current.zoomIn()} 
+                        className="w-10 h-10 rounded-md border border-gray-300 hover:bg-gray-100 active:scale-95 flex items-center justify-center text-lg font-bold text-gray-700"
+                    >
+                        +
+                    </button>
+                    <button 
+                        type="button" 
+                        aria-label="ズームアウト" 
+                        onClick={() => controlsRef.current.zoomOut()} 
+                        className="w-10 h-10 rounded-md border border-gray-300 hover:bg-gray-100 active:scale-95 flex items-center justify-center text-lg font-bold text-gray-700"
+                    >
+                        −
+                    </button>
                 </div>
             </div>
             <div ref={overlayRef} className="pointer-events-none absolute left-3 top-3 text-sm text-gray-700 bg-white/80 backdrop-blur rounded-xl shadow p-3">
                 <div className="font-medium">操作</div>
                 <ul className="list-disc pl-5">
-                    <li>右上のスライダー：ズーム（＋／−）</li>
+                    <li>右上のボタン：ズーム（＋／−）</li>
                     <li>ホイール：ズーム（カーソル中心）</li>
                     <li>ドラッグ：パン</li>
                     <li>ダブルクリック / R：全体表示にリセット</li>
