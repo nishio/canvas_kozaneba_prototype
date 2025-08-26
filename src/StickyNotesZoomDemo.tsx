@@ -392,19 +392,7 @@ export default function StickyNotesZoomDemo() {
 
             // HUD（スクリーン座標に戻す）
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-            // 格子点の統計を計算
-            const gridCounts = new Map<string, number>();
-            for (const n of notes) {
-                const key = `${n.gridX},${n.gridY}`;
-                gridCounts.set(key, (gridCounts.get(key) || 0) + 1);
-            }
-
-            // トップ10を取得
-            const top10 = Array.from(gridCounts.entries())
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 10);
-
-            // 右下にスケールと可視枚数、左下に格子点統計
+            // 右下にスケールと可視枚数
             const hudPad = 12;
             const hudText = `zoom ${(scale).toFixed(2)}  |  visible ${visibleCount}`;
             ctx.font = `12px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace`;
@@ -415,18 +403,6 @@ export default function StickyNotesZoomDemo() {
             ctx.fillStyle = "white";
             ctx.fillText(hudText, cssW - tw - hudPad + 8, cssH - th - hudPad + 6);
 
-            // 左下に格子点統計を表示
-            const gridStatsHeight = top10.length * 16 + 40;
-            ctx.fillStyle = "rgba(0,0,0,0.5)";
-            ctx.fillRect(hudPad, cssH - gridStatsHeight - hudPad, 300, gridStatsHeight);
-            ctx.fillStyle = "white";
-            ctx.font = `14px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace`;
-            ctx.fillText("Top 10 Grid Positions:", hudPad + 8, cssH - gridStatsHeight - hudPad + 16);
-            ctx.font = `12px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace`;
-            top10.forEach(([gridPos, count], index) => {
-                const y = cssH - gridStatsHeight - hudPad + 36 + index * 16;
-                ctx.fillText(`${index + 1}. (${gridPos}) = ${count} notes`, hudPad + 8, y);
-            });
 
             setInfo((prev) => (prev.zoom !== scale || prev.visible !== visibleCount) ? { zoom: scale, visible: visibleCount } : prev);
         }
