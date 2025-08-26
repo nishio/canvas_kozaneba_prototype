@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { Note, HierarchicalResult } from './types';
 
 // 単一ファイル・依存ライブラリなしのデモ
 // ・Canvas2Dで1万枚の付箋を仮想スクロール/ズーム
@@ -10,10 +11,10 @@ import { useEffect, useRef, useState } from "react";
 export default function StickyNotesZoomDemo() {
     const canvasRef = useRef(null);
     const overlayRef = useRef(null);
-    const controlsRef = useRef({ 
-        setZoomCenter: (_z: number) => { }, 
-        zoomIn: () => { }, 
-        zoomOut: () => { } 
+    const controlsRef = useRef({
+        setZoomCenter: (_z: number) => { },
+        zoomIn: () => { },
+        zoomOut: () => { }
     });
     const MIN_ZOOM = 0.05;
     const MAX_ZOOM = 6;
@@ -35,38 +36,63 @@ export default function StickyNotesZoomDemo() {
         const ctx = canvas.getContext("2d", { alpha: true, desynchronized: true });
         const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
 
-        // ======= データ生成（1万枚） =======
-        const NOTES_X = 100;
-        const NOTES_Y = 100;
-        const NOTE_W = 180;
-        const NOTE_H = 120;
-        const GAP_X = 60;
-        const GAP_Y = 40;
-        const WORLD_W = NOTES_X * (NOTE_W + GAP_X);
-        const WORLD_H = NOTES_Y * (NOTE_H + GAP_Y);
-
-        interface Note {
-            x: number;
-            y: number;
-            w: number;
-            h: number;
-            color: string;
-            text: string;
-        }
+        // ======= データ読み込み =======
+        const NOTE_SIZE = 120; // 正方形サイズ
         const notes: Note[] = [];
-        let id = 0;
-        for (let gy = 0; gy < NOTES_Y; gy++) {
-            for (let gx = 0; gx < NOTES_X; gx++) {
-                const x = gx * (NOTE_W + GAP_X);
-                const y = gy * (NOTE_H + GAP_Y);
-                const hue = ((gx * 7 + gy * 11) % 360);
-                const color = `hsl(${hue} 90% 85%)`;
-                const text = `付箋 #${id} — ここに長文のメモ本文が入る想定。` +
-                    " 課題・仮説・TODO・引用など。Zoomすると先頭行のみ表示。";
-                notes.push({ x, y, w: NOTE_W, h: NOTE_H, color, text });
-                id++;
-            }
-        }
+        let WORLD_W = 800;
+        let WORLD_H = 600;
+
+        // スケール調整パラメータ（重なりを調整）
+        const POSITION_SCALE = 4000; // この値を大きくすると付箋が離れる
+
+        // JSONファイルからデータを読み込み
+        fetch('/hierarchical_result.json')
+            .then(response => response.json())
+            .then((data: HierarchicalResult) => {
+                notes.length = 0; // 配列をクリア
+
+                // 座標の範囲を計算してワールドサイズを決定
+                const minX = Math.min(...data.arguments.map(arg => arg.x));
+                const maxX = Math.max(...data.arguments.map(arg => arg.x));
+                const minY = Math.min(...data.arguments.map(arg => arg.y));
+                const maxY = Math.max(...data.arguments.map(arg => arg.y));
+
+                data.arguments.forEach((arg, index) => {
+                    const rawX = (arg.x - minX) * POSITION_SCALE;
+                    const rawY = (arg.y - minY) * POSITION_SCALE;
+
+                    // 格子点にスナップ
+                    const gridX = Math.floor(rawX / NOTE_SIZE);
+                    const gridY = Math.floor(rawY / NOTE_SIZE);
+                    const x = gridX * NOTE_SIZE;
+                    const y = gridY * NOTE_SIZE;
+
+                    const hue = (index * 137.5) % 360; // ゴールデンアングルで色分散
+                    const color = `hsl(${hue} 70% 80%)`;
+
+                    notes.push({
+                        id: arg.arg_id,
+                        x,
+                        y,
+                        w: NOTE_SIZE,
+                        h: NOTE_SIZE, // 正方形
+                        color,
+                        text: arg.argument,
+                        gridX,
+                        gridY
+                    });
+                });
+
+                WORLD_W = (maxX - minX) * POSITION_SCALE + NOTE_SIZE * 2;
+                WORLD_H = (maxY - minY) * POSITION_SCALE + NOTE_SIZE * 2;
+
+                // 初期表示を更新
+                fitToView();
+                needRedraw = true;
+            })
+            .catch(error => {
+                console.error('Failed to load hierarchical_result.json:', error);
+            });
 
         // ======= ビュートランスフォーム =======
         let scale = 1, targetScale = 1; // world→screen 拡大率
@@ -130,19 +156,19 @@ export default function StickyNotesZoomDemo() {
             const rect = canvas.getBoundingClientRect();
             const mouseX = e.clientX - rect.left;
             const mouseY = e.clientY - rect.top;
-            
+
             // ズーム前のワールド座標
             const worldX = (mouseX - tx) / scale;
             const worldY = (mouseY - ty) / scale;
-            
+
             // 新しいスケール
             const delta = e.deltaY > 0 ? 0.9 : 1.1;
             const newScale = clamp(scale * delta, MIN_ZOOM, MAX_ZOOM);
-            
+
             // マウス位置を固定点として平行移動を調整
             tx = mouseX - worldX * newScale;
             ty = mouseY - worldY * newScale;
-            
+
             scale = targetScale = newScale;
             needRedraw = true;
         }
@@ -226,10 +252,11 @@ export default function StickyNotesZoomDemo() {
             ctx.setTransform(scale * dpr, 0, 0, scale * dpr, tx * dpr, ty * dpr);
 
             // LOD判定（付箋のスクリーン上幅で目安）
-            const screenNoteW = NOTE_W * scale;
+            const screenNoteW = NOTE_SIZE * scale;
             // LOD0: とても遠い（点）  LOD1: 小矩形  LOD2: 角丸  LOD3: 角丸+影+テキスト
             let lod = 0;
-            if (screenNoteW < 6) lod = 0; else if (screenNoteW < 24) lod = 1; else if (screenNoteW < 110) lod = 2; else lod = 3;
+            // if (screenNoteW < 6) lod = 0; else if (screenNoteW < 24) lod = 1; else if (screenNoteW < 110) lod = 2; else lod = 3;
+            lod = 1;
 
             let visibleCount = 0;
 
@@ -238,24 +265,24 @@ export default function StickyNotesZoomDemo() {
                 ctx.fillStyle = "#cfcfcf";
                 ctx.beginPath();
                 for (const n of notes) {
-                    if (n.x > viewR || n.x + NOTE_W < viewL || n.y > viewB || n.y + NOTE_H < viewT) continue;
+                    if (n.x > viewR || n.x + n.w < viewL || n.y > viewB || n.y + n.h < viewT) continue;
                     visibleCount++;
-                    ctx.rect(n.x + NOTE_W * 0.5, n.y + NOTE_H * 0.5, 1 / scale, 1 / scale);
+                    ctx.rect(n.x + NOTE_SIZE * 0.5, n.y + NOTE_SIZE * 0.5, 1 / scale, 1 / scale);
                 }
                 ctx.fill();
             } else if (lod === 1) {
                 // 小さな塗り矩形（影なし・高速）
                 for (const n of notes) {
-                    if (n.x > viewR || n.x + NOTE_W < viewL || n.y > viewB || n.y + NOTE_H < viewT) continue;
+                    if (n.x > viewR || n.x + n.w < viewL || n.y > viewB || n.y + n.h < viewT) continue;
                     visibleCount++;
                     ctx.fillStyle = n.color;
-                    ctx.fillRect(n.x, n.y, NOTE_W, NOTE_H);
+                    ctx.fillRect(n.x, n.y, n.w, n.h);
                 }
             } else {
                 // 角丸（LOD2/3）
                 const radius = 12;
                 for (const n of notes) {
-                    if (n.x > viewR || n.x + NOTE_W < viewL || n.y > viewB || n.y + NOTE_H < viewT) continue;
+                    if (n.x > viewR || n.x + n.w < viewL || n.y > viewB || n.y + n.h < viewT) continue;
                     visibleCount++;
                     if (lod === 3) {
                         ctx.shadowColor = "rgba(0,0,0,0.15)";
@@ -266,17 +293,17 @@ export default function StickyNotesZoomDemo() {
                         ctx.shadowBlur = 0;
                         ctx.shadowOffsetY = 0;
                     }
-                    roundedRectPath(ctx, n.x, n.y, NOTE_W, NOTE_H, radius);
+                    roundedRectPath(ctx, n.x, n.y, n.w, n.h, radius);
                     ctx.fillStyle = n.color;
                     ctx.fill();
 
                     // 折り返し（付箋っぽい角）
                     if (lod >= 2) {
-                        const fold = Math.min(18, NOTE_W * 0.12);
+                        const fold = Math.min(18, n.w * 0.12);
                         ctx.beginPath();
-                        ctx.moveTo(n.x + NOTE_W - fold, n.y);
-                        ctx.lineTo(n.x + NOTE_W, n.y);
-                        ctx.lineTo(n.x + NOTE_W, n.y + fold);
+                        ctx.moveTo(n.x + n.w - fold, n.y);
+                        ctx.lineTo(n.x + n.w, n.y);
+                        ctx.lineTo(n.x + n.w, n.y + fold);
                         ctx.closePath();
                         ctx.fillStyle = "rgba(255,255,255,0.75)";
                         ctx.fill();
@@ -290,7 +317,7 @@ export default function StickyNotesZoomDemo() {
                         const fontPx = 14;
                         ctx.font = `${fontPx}px ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto`;
                         ctx.textBaseline = "top";
-                        const maxW = NOTE_W - pad * 2;
+                        const maxW = n.w - pad * 2;
                         // 先頭行を切り詰め
                         let line = n.text;
                         while (ctx.measureText(line).width > maxW) {
@@ -305,7 +332,19 @@ export default function StickyNotesZoomDemo() {
 
             // HUD（スクリーン座標に戻す）
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-            // 右下にスケールと可視枚数
+            // 格子点の統計を計算
+            const gridCounts = new Map<string, number>();
+            for (const n of notes) {
+                const key = `${n.gridX},${n.gridY}`;
+                gridCounts.set(key, (gridCounts.get(key) || 0) + 1);
+            }
+
+            // トップ10を取得
+            const top10 = Array.from(gridCounts.entries())
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10);
+
+            // 右下にスケールと可視枚数、左下に格子点統計
             const hudPad = 12;
             const hudText = `zoom ${(scale).toFixed(2)}  |  visible ${visibleCount}`;
             ctx.font = `12px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace`;
@@ -315,6 +354,19 @@ export default function StickyNotesZoomDemo() {
             ctx.fillRect(cssW - tw - hudPad, cssH - th - hudPad, tw, th);
             ctx.fillStyle = "white";
             ctx.fillText(hudText, cssW - tw - hudPad + 8, cssH - th - hudPad + 6);
+
+            // 左下に格子点統計を表示
+            const gridStatsHeight = top10.length * 16 + 40;
+            ctx.fillStyle = "rgba(0,0,0,0.5)";
+            ctx.fillRect(hudPad, cssH - gridStatsHeight - hudPad, 300, gridStatsHeight);
+            ctx.fillStyle = "white";
+            ctx.font = `14px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace`;
+            ctx.fillText("Top 10 Grid Positions:", hudPad + 8, cssH - gridStatsHeight - hudPad + 16);
+            ctx.font = `12px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace`;
+            top10.forEach(([gridPos, count], index) => {
+                const y = cssH - gridStatsHeight - hudPad + 36 + index * 16;
+                ctx.fillText(`${index + 1}. (${gridPos}) = ${count} notes`, hudPad + 8, y);
+            });
 
             setInfo((prev) => (prev.zoom !== scale || prev.visible !== visibleCount) ? { zoom: scale, visible: visibleCount } : prev);
         }
