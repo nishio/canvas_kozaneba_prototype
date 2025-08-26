@@ -9,8 +9,8 @@ import type { Note, HierarchicalResult } from './types';
 // ※さらに大規模にしたい場合はWebGL(PixiJS)やタイル化/オフスクリーンなどを検討
 
 export default function StickyNotesZoomDemo() {
-    const canvasRef = useRef(null);
-    const overlayRef = useRef(null);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const overlayRef = useRef<HTMLDivElement>(null);
     const controlsRef = useRef({
         setZoomCenter: (_z: number) => { },
         zoomIn: () => { },
@@ -49,7 +49,9 @@ export default function StickyNotesZoomDemo() {
         const canvas = canvasRef.current;
         if (!canvas) return;
         const parent = canvas.parentElement;
+        if (!parent) return;
         const ctx = canvas.getContext("2d", { alpha: true, desynchronized: true });
+        if (!ctx) return;
         const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
 
         // ======= データ読み込み =======
@@ -202,27 +204,38 @@ export default function StickyNotesZoomDemo() {
 
         // スライダー/ボタンからのズーム適用（Google Maps風：中心基準）
         function setZoomAt(newScale: number, mx: number, my: number) {
-            const before = screenToWorld(mx, my);
-            targetScale = clamp(newScale, MIN_ZOOM, MAX_ZOOM);
-            tx = mx - before.x * targetScale;
-            ty = my - before.y * targetScale;
+            const before = screenToWorld(mx, my, scale, tx, ty);
+            const clampedScale = clamp(newScale, MIN_ZOOM, MAX_ZOOM);
+            targetScale = clampedScale;
+            tx = mx - before.x * clampedScale;
+            ty = my - before.y * clampedScale;
             needRedraw = true;
         }
         controlsRef.current.setZoomCenter = (newScale: number) => {
-            const cssW = canvas.width / dpr;
-            const cssH = canvas.height / dpr;
-            setZoomAt(newScale, cssW * 0.5, cssH * 0.5);
+            const cssW = parent.clientWidth;
+            const cssH = parent.clientHeight;
+            // 現在の表示領域の中心点を維持
+            const currentCenterX = cssW * 0.5;
+            const currentCenterY = cssH * 0.5;
+            const worldCenter = screenToWorld(currentCenterX, currentCenterY, scale, tx, ty);
+            
+            const clampedScale = clamp(newScale, MIN_ZOOM, MAX_ZOOM);
+            targetScale = clampedScale;
+            // 同じワールド座標が画面中央に来るように調整
+            tx = currentCenterX - worldCenter.x * clampedScale;
+            ty = currentCenterY - worldCenter.y * clampedScale;
+            needRedraw = true;
         };
         controlsRef.current.zoomIn = () => {
-            controlsRef.current.setZoomCenter(targetScale * Math.pow(2, 0.2));
+            controlsRef.current.setZoomCenter(targetScale * 1.1);
         };
         controlsRef.current.zoomOut = () => {
-            controlsRef.current.setZoomCenter(targetScale / Math.pow(2, 0.2));
+            controlsRef.current.setZoomCenter(targetScale / 1.1);
         };
 
         function onWheel(e: WheelEvent) {
             e.preventDefault();
-            const rect = canvas.getBoundingClientRect();
+            const rect = canvas!.getBoundingClientRect();
             const mouseX = e.clientX - rect.left;
             const mouseY = e.clientY - rect.top;
 
@@ -245,7 +258,7 @@ export default function StickyNotesZoomDemo() {
         function onPointerDown(e: PointerEvent) {
             dragging = true;
             lastX = e.clientX; lastY = e.clientY;
-            canvas.setPointerCapture(e.pointerId);
+            canvas!.setPointerCapture(e.pointerId);
         }
         function onPointerMove(e: PointerEvent) {
             if (!dragging) return;
@@ -257,7 +270,7 @@ export default function StickyNotesZoomDemo() {
         }
         function onPointerUp(e: PointerEvent) {
             dragging = false;
-            canvas.releasePointerCapture(e.pointerId);
+            canvas!.releasePointerCapture(e.pointerId);
         }
         function onDblClick() {
             fitToView();
@@ -266,18 +279,18 @@ export default function StickyNotesZoomDemo() {
             if (e.key === "r" || e.key === "R") fitToView();
         }
 
-        canvas.addEventListener("wheel", onWheel, { passive: false });
-        canvas.addEventListener("pointerdown", onPointerDown);
-        window.addEventListener("pointermove", onPointerMove);
-        window.addEventListener("pointerup", onPointerUp);
-        canvas.addEventListener("dblclick", onDblClick);
-        window.addEventListener("resize", () => { resize(); needRedraw = true; });
-        window.addEventListener("keydown", onKey);
+        canvas!.addEventListener("wheel", onWheel, { passive: false });
+        canvas!.addEventListener("pointerdown", onPointerDown);
+        globalThis.addEventListener("pointermove", onPointerMove);
+        globalThis.addEventListener("pointerup", onPointerUp);
+        canvas!.addEventListener("dblclick", onDblClick);
+        globalThis.addEventListener("resize", () => { resize(); needRedraw = true; });
+        globalThis.addEventListener("keydown", onKey);
 
         // ======= 描画 =======
         function clamp(v: number, lo: number, hi: number) { return Math.max(lo, Math.min(hi, v)); }
 
-        function roundedRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+        function _roundedRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
             const rr = Math.min(r, w * 0.5, h * 0.5);
             ctx.beginPath();
             ctx.moveTo(x + rr, y);
@@ -293,8 +306,8 @@ export default function StickyNotesZoomDemo() {
         }
 
         function draw() {
-            const cssW = canvas.width / dpr;
-            const cssH = canvas.height / dpr;
+            const cssW = canvas!.width / dpr;
+            const cssH = canvas!.height / dpr;
             // 背景
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
             ctx.clearRect(0, 0, cssW, cssH);
@@ -305,7 +318,7 @@ export default function StickyNotesZoomDemo() {
             // スムーズにtargetScaleへ補間
             const diff = targetScale - scale;
             if (Math.abs(diff) > 1e-4) {
-                scale += diff * 0.15; // easing
+                scale += diff * 0.25; // より速いeasing
                 needRedraw = true;
             } else {
                 scale = targetScale;
@@ -436,12 +449,12 @@ export default function StickyNotesZoomDemo() {
         // クリーンアップ
         return () => {
             cancelAnimationFrame(rafId);
-            canvas.removeEventListener("wheel", onWheel);
-            canvas.removeEventListener("pointerdown", onPointerDown);
-            window.removeEventListener("pointermove", onPointerMove);
-            window.removeEventListener("pointerup", onPointerUp);
-            canvas.removeEventListener("dblclick", onDblClick);
-            window.removeEventListener("keydown", onKey);
+            canvas!.removeEventListener("wheel", onWheel);
+            canvas!.removeEventListener("pointerdown", onPointerDown);
+            globalThis.removeEventListener("pointermove", onPointerMove);
+            globalThis.removeEventListener("pointerup", onPointerUp);
+            canvas!.removeEventListener("dblclick", onDblClick);
+            globalThis.removeEventListener("keydown", onKey);
         };
     }, []);
 
