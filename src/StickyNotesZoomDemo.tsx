@@ -16,16 +16,32 @@ export default function StickyNotesZoomDemo() {
         zoomIn: () => { },
         zoomOut: () => { }
     });
-    const MIN_ZOOM = 0.01;
+    let MIN_ZOOM = 0.01; // 初期化後に実際の値に更新される
     const MAX_ZOOM = 6;
-    // スライダー↔スケールの指数マッピング
+    
+    // 混合スケーリング: 1.0まで指数関数、それ以降は線形
     const scaleToSlider = (s: number) => {
-        const t = Math.log(s / MIN_ZOOM) / Math.log(MAX_ZOOM / MIN_ZOOM);
-        return Math.round(Math.min(1, Math.max(0, t)) * 100);
+        if (s <= 1.0) {
+            // 指数スケーリング: MIN_ZOOM から 1.0 まで
+            const t = Math.log(s / MIN_ZOOM) / Math.log(1.0 / MIN_ZOOM);
+            return Math.round(Math.min(0.5, Math.max(0, t)) * 100);
+        } else {
+            // 線形スケーリング: 1.0 から MAX_ZOOM まで
+            const t = 0.5 + (s - 1.0) / (MAX_ZOOM - 1.0) * 0.5;
+            return Math.round(Math.min(1, Math.max(0.5, t)) * 100);
+        }
     };
     const sliderToScale = (v: string) => {
         const t = Math.min(100, Math.max(0, Number(v))) / 100;
-        return MIN_ZOOM * Math.pow(MAX_ZOOM / MIN_ZOOM, t);
+        if (t <= 0.5) {
+            // 指数スケーリング: MIN_ZOOM から 1.0 まで
+            const expT = t * 2; // 0-0.5 を 0-1 に変換
+            return MIN_ZOOM * Math.pow(1.0 / MIN_ZOOM, expT);
+        } else {
+            // 線形スケーリング: 1.0 から MAX_ZOOM まで
+            const linT = (t - 0.5) * 2; // 0.5-1 を 0-1 に変換
+            return 1.0 + linT * (MAX_ZOOM - 1.0);
+        }
     };
     const [info, setInfo] = useState({ zoom: 1, visible: 0 });
 
@@ -158,6 +174,7 @@ export default function StickyNotesZoomDemo() {
             const cssW = parent.clientWidth;
             const cssH = parent.clientHeight;
             const s = Math.min(cssW / WORLD_W, cssH / WORLD_H) * 0.92; // 少し余白
+            MIN_ZOOM = s; // MIN_ZOOMを初期表示に合わせる
             targetScale = scale = s;
             tx = (cssW - WORLD_W * scale) / 2;
             ty = (cssH - WORLD_H * scale) / 2;
