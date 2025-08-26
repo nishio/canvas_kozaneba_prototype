@@ -322,7 +322,7 @@ export default function StickyNotesZoomDemo() {
 
             // テキスト表示判定（付箋のスクリーン上幅で判定）
             const screenNoteW = NOTE_SIZE * scale;
-            const showText = screenNoteW >= 40; // 40px以上でテキスト表示
+            const showText = screenNoteW >= 100; // 40px以上でテキスト表示
 
             let visibleCount = 0;
 
@@ -451,18 +451,18 @@ export default function StickyNotesZoomDemo() {
             {/* ズームコントローラ */}
             <div className="absolute right-3 top-3 z-10 pointer-events-auto">
                 <div className="flex flex-col items-center gap-1 bg-white/90 backdrop-blur rounded-lg shadow-lg p-1">
-                    <button 
-                        type="button" 
-                        aria-label="ズームイン" 
-                        onClick={() => controlsRef.current.zoomIn()} 
+                    <button
+                        type="button"
+                        aria-label="ズームイン"
+                        onClick={() => controlsRef.current.zoomIn()}
                         className="w-10 h-10 rounded-md border border-gray-300 hover:bg-gray-100 active:scale-95 flex items-center justify-center text-lg font-bold text-gray-700"
                     >
                         +
                     </button>
-                    <button 
-                        type="button" 
-                        aria-label="ズームアウト" 
-                        onClick={() => controlsRef.current.zoomOut()} 
+                    <button
+                        type="button"
+                        aria-label="ズームアウト"
+                        onClick={() => controlsRef.current.zoomOut()}
                         className="w-10 h-10 rounded-md border border-gray-300 hover:bg-gray-100 active:scale-95 flex items-center justify-center text-lg font-bold text-gray-700"
                     >
                         −
