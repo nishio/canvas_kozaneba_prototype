@@ -17,8 +17,8 @@ export default function StickyNotesZoomDemo() {
         zoomOut: () => { }
     });
     let MIN_ZOOM = 0.01; // 初期化後に実際の値に更新される
-    const MAX_ZOOM = 6;
-    
+    const MAX_ZOOM = 1.5;
+
     // 混合スケーリング: 1.0まで指数関数、それ以降は線形
     const scaleToSlider = (s: number) => {
         if (s <= 1.0) {
@@ -330,11 +330,11 @@ export default function StickyNotesZoomDemo() {
             for (const n of notes) {
                 if (n.x > viewR || n.x + n.w < viewL || n.y > viewB || n.y + n.h < viewT) continue;
                 visibleCount++;
-                
+
                 // 背景矩形
                 ctx.fillStyle = n.color;
                 ctx.fillRect(n.x, n.y, n.w, n.h);
-                
+
                 if (showText) {
                     // テキスト表示（複数行対応）
                     const pad = 8;
