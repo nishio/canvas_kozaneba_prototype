@@ -9,6 +9,7 @@ import type { Note, HierarchicalResult } from './types';
 // ※さらに大規模にしたい場合はWebGL(PixiJS)やタイル化/オフスクリーンなどを検討
 
 export default function StickyNotesZoomDemo() {
+    const containerRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const overlayRef = useRef<HTMLDivElement>(null);
     const controlsRef = useRef({
@@ -23,7 +24,7 @@ export default function StickyNotesZoomDemo() {
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
-        const parent = canvas.parentElement;
+        const parent = (containerRef.current ?? canvas.parentElement) as HTMLElement | null;
         if (!parent) return;
         const ctx = canvas.getContext("2d", { alpha: true, desynchronized: true });
         if (!ctx) return;
@@ -161,13 +162,24 @@ export default function StickyNotesZoomDemo() {
             needRedraw = true;
         }
 
+        function fitContainerToViewport() {
+            const vv = globalThis.visualViewport;
+            const cssW = Math.max(1, Math.round(vv?.width ?? globalThis.innerWidth));
+            const cssH = Math.max(1, Math.round(vv?.height ?? globalThis.innerHeight));
+            // 親そのものを実表示サイズに合わせる（Safari対策）
+            parent!.style.width = `${cssW}px`;
+            parent!.style.height = `${cssH}px`;
+        }
+
         function resize() {
-            const cssW = parent!.clientWidth | 0;
-            const cssH = parent!.clientHeight | 0;
-            canvas!.width = Math.max(1, cssW * dpr);
-            canvas!.height = Math.max(1, cssH * dpr);
-            canvas!.style.width = cssW + "px";
-            canvas!.style.height = cssH + "px";
+            fitContainerToViewport();
+            const rect = parent!.getBoundingClientRect(); // 親の実サイズ
+            const cssW = Math.max(1, Math.round(rect.width));
+            const cssH = Math.max(1, Math.round(rect.height));
+            canvas!.width = Math.max(1, Math.round(cssW * dpr));
+            canvas!.height = Math.max(1, Math.round(cssH * dpr));
+            canvas!.style.width = `${cssW}px`;
+            canvas!.style.height = `${cssH}px`;
             needRedraw = true;
         }
 
@@ -258,6 +270,10 @@ export default function StickyNotesZoomDemo() {
         globalThis.addEventListener("pointerup", onPointerUp);
         canvas!.addEventListener("dblclick", onDblClick);
         globalThis.addEventListener("resize", () => { resize(); needRedraw = true; });
+        const onVvResize = () => { resize(); };
+        const onVvScroll = () => { resize(); };
+        globalThis.visualViewport?.addEventListener("resize", onVvResize);
+        globalThis.visualViewport?.addEventListener("scroll", onVvScroll);
         globalThis.addEventListener("keydown", onKey);
 
         // ======= 描画 =======
@@ -421,11 +437,13 @@ export default function StickyNotesZoomDemo() {
             globalThis.removeEventListener("pointerup", onPointerUp);
             canvas!.removeEventListener("dblclick", onDblClick);
             globalThis.removeEventListener("keydown", onKey);
+            globalThis.visualViewport?.removeEventListener("resize", onVvResize);
+            globalThis.visualViewport?.removeEventListener("scroll", onVvScroll);
         };
     }, []);
 
     return (
-        <div className="w-full h-[80vh] relative bg-white">
+        <div ref={containerRef} className="fixed inset-0 bg-white overflow-hidden touch-none">
             <canvas ref={canvasRef} className="block w-full h-full" />
             {/* ズームコントローラ */}
             <div className="absolute right-3 top-3 z-10 pointer-events-auto">
