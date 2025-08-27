@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import type { Note, HierarchicalResult } from './types';
 
 // 単一ファイル・依存ライブラリなしのデモ
@@ -19,31 +19,6 @@ export default function StickyNotesZoomDemo() {
     let MIN_ZOOM = 0.01; // 初期化後に実際の値に更新される
     const MAX_ZOOM = 1.5;
 
-    // 混合スケーリング: 1.0まで指数関数、それ以降は線形
-    const scaleToSlider = (s: number) => {
-        if (s <= 1.0) {
-            // 指数スケーリング: MIN_ZOOM から 1.0 まで
-            const t = Math.log(s / MIN_ZOOM) / Math.log(1.0 / MIN_ZOOM);
-            return Math.round(Math.min(0.5, Math.max(0, t)) * 100);
-        } else {
-            // 線形スケーリング: 1.0 から MAX_ZOOM まで
-            const t = 0.5 + (s - 1.0) / (MAX_ZOOM - 1.0) * 0.5;
-            return Math.round(Math.min(1, Math.max(0.5, t)) * 100);
-        }
-    };
-    const sliderToScale = (v: string) => {
-        const t = Math.min(100, Math.max(0, Number(v))) / 100;
-        if (t <= 0.5) {
-            // 指数スケーリング: MIN_ZOOM から 1.0 まで
-            const expT = t * 2; // 0-0.5 を 0-1 に変換
-            return MIN_ZOOM * Math.pow(1.0 / MIN_ZOOM, expT);
-        } else {
-            // 線形スケーリング: 1.0 から MAX_ZOOM まで
-            const linT = (t - 0.5) * 2; // 0.5-1 を 0-1 に変換
-            return 1.0 + linT * (MAX_ZOOM - 1.0);
-        }
-    };
-    const [info, setInfo] = useState({ zoom: 1, visible: 0 });
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -52,7 +27,7 @@ export default function StickyNotesZoomDemo() {
         if (!parent) return;
         const ctx = canvas.getContext("2d", { alpha: true, desynchronized: true });
         if (!ctx) return;
-        const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+        const dpr = Math.max(1, Math.min(globalThis.devicePixelRatio || 1, 2));
 
         // ======= データ読み込み =======
         const NOTE_SIZE = 120; // 正方形サイズ
@@ -174,8 +149,8 @@ export default function StickyNotesZoomDemo() {
         let needRedraw = true;
 
         function fitToView() {
-            const cssW = parent.clientWidth;
-            const cssH = parent.clientHeight;
+            const cssW = parent!.clientWidth;
+            const cssH = parent!.clientHeight;
             const s = Math.min(cssW / WORLD_W, cssH / WORLD_H) * 0.92; // 少し余白
             MIN_ZOOM = s; // MIN_ZOOMを初期表示に合わせる
             targetScale = scale = s;
@@ -187,12 +162,12 @@ export default function StickyNotesZoomDemo() {
         }
 
         function resize() {
-            const cssW = parent.clientWidth | 0;
-            const cssH = parent.clientHeight | 0;
-            canvas.width = Math.max(1, cssW * dpr);
-            canvas.height = Math.max(1, cssH * dpr);
-            canvas.style.width = cssW + "px";
-            canvas.style.height = cssH + "px";
+            const cssW = parent!.clientWidth | 0;
+            const cssH = parent!.clientHeight | 0;
+            canvas!.width = Math.max(1, cssW * dpr);
+            canvas!.height = Math.max(1, cssH * dpr);
+            canvas!.style.width = cssW + "px";
+            canvas!.style.height = cssH + "px";
             needRedraw = true;
         }
 
@@ -205,18 +180,9 @@ export default function StickyNotesZoomDemo() {
             return { x: (sx - ox) / s, y: (sy - oy) / s };
         }
 
-        // スライダー/ボタンからのズーム適用（Google Maps風：中心基準）
-        function setZoomAt(newScale: number, mx: number, my: number) {
-            const before = screenToWorld(mx, my, scale, tx, ty);
-            const clampedScale = clamp(newScale, MIN_ZOOM, MAX_ZOOM);
-            targetScale = clampedScale;
-            tx = mx - before.x * clampedScale;
-            ty = my - before.y * clampedScale;
-            needRedraw = true;
-        }
         controlsRef.current.setZoomCenter = (newScale: number) => {
-            const cssW = parent.clientWidth;
-            const cssH = parent.clientHeight;
+            const cssW = parent!.clientWidth;
+            const cssH = parent!.clientHeight;
             // 現在の表示領域の中心点を維持
             const currentCenterX = cssW * 0.5;
             const currentCenterY = cssH * 0.5;
@@ -297,30 +263,16 @@ export default function StickyNotesZoomDemo() {
         // ======= 描画 =======
         function clamp(v: number, lo: number, hi: number) { return Math.max(lo, Math.min(hi, v)); }
 
-        function _roundedRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
-            const rr = Math.min(r, w * 0.5, h * 0.5);
-            ctx.beginPath();
-            ctx.moveTo(x + rr, y);
-            ctx.lineTo(x + w - rr, y);
-            ctx.quadraticCurveTo(x + w, y, x + w, y + rr);
-            ctx.lineTo(x + w, y + h - rr);
-            ctx.quadraticCurveTo(x + w, y + h, x + w - rr, y + h);
-            ctx.lineTo(x + rr, y + h);
-            ctx.quadraticCurveTo(x, y + h, x, y + h - rr);
-            ctx.lineTo(x, y + rr);
-            ctx.quadraticCurveTo(x, y, x + rr, y);
-            ctx.closePath();
-        }
 
         function draw() {
             const cssW = canvas!.width / dpr;
             const cssH = canvas!.height / dpr;
             // 背景
-            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-            ctx.clearRect(0, 0, cssW, cssH);
+            ctx!.setTransform(dpr, 0, 0, dpr, 0, 0);
+            ctx!.clearRect(0, 0, cssW, cssH);
             // グリッド風の微妙な背景
-            ctx.fillStyle = "#fafafa";
-            ctx.fillRect(0, 0, cssW, cssH);
+            ctx!.fillStyle = "#fafafa";
+            ctx!.fillRect(0, 0, cssW, cssH);
 
             // スムーズに target* へ補間
             const sDiff = targetScale - scale;
@@ -346,7 +298,7 @@ export default function StickyNotesZoomDemo() {
             const viewB = (cssH - ty) / scale;
 
             // World変換
-            ctx.setTransform(scale * dpr, 0, 0, scale * dpr, tx * dpr, ty * dpr);
+            ctx!.setTransform(scale * dpr, 0, 0, scale * dpr, tx * dpr, ty * dpr);
 
             // テキスト表示判定（付箋のスクリーン上幅で判定）
             const screenNoteW = NOTE_SIZE * scale;
@@ -360,17 +312,17 @@ export default function StickyNotesZoomDemo() {
                 visibleCount++;
 
                 // 背景矩形
-                ctx.fillStyle = n.color;
-                ctx.fillRect(n.x, n.y, n.w, n.h);
+                ctx!.fillStyle = n.color;
+                ctx!.fillRect(n.x, n.y, n.w, n.h);
 
                 if (showText) {
                     // テキスト表示（複数行対応）
                     const pad = 8;
-                    ctx.fillStyle = "#3a3a3a";
+                    ctx!.fillStyle = "#3a3a3a";
                     const fontPx = 12;
                     const lineHeight = fontPx * 1.2;
-                    ctx.font = `${fontPx}px ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto`;
-                    ctx.textBaseline = "top";
+                    ctx!.font = `${fontPx}px ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto`;
+                    ctx!.textBaseline = "top";
                     const maxW = n.w - pad * 2;
                     const maxH = n.h - pad * 2;
                     const maxLines = Math.floor(maxH / lineHeight);
@@ -382,7 +334,7 @@ export default function StickyNotesZoomDemo() {
 
                         for (const word of words) {
                             const testLine = currentLine ? currentLine + " " + word : word;
-                            const testWidth = ctx.measureText(testLine).width;
+                            const testWidth = ctx!.measureText(testLine).width;
 
                             if (testWidth <= maxW) {
                                 currentLine = testLine;
@@ -395,7 +347,7 @@ export default function StickyNotesZoomDemo() {
                                     let charLine = "";
                                     for (const char of word) {
                                         const testChar = charLine + char;
-                                        if (ctx.measureText(testChar).width <= maxW) {
+                                        if (ctx!.measureText(testChar).width <= maxW) {
                                             charLine = testChar;
                                         } else {
                                             if (charLine) {
@@ -421,7 +373,7 @@ export default function StickyNotesZoomDemo() {
                         // 最後の行が省略される場合は「…」を追加
                         if (lines.length === maxLines && (lines.join(" ").length < n.text.length)) {
                             let lastLine = lines[lines.length - 1];
-                            while (ctx.measureText(lastLine + "…").width > maxW && lastLine.length > 0) {
+                            while (ctx!.measureText(lastLine + "…").width > maxW && lastLine.length > 0) {
                                 lastLine = lastLine.slice(0, -1);
                             }
                             lines[lines.length - 1] = lastLine + "…";
@@ -429,27 +381,26 @@ export default function StickyNotesZoomDemo() {
 
                         // 各行を描画
                         for (let i = 0; i < lines.length; i++) {
-                            ctx.fillText(lines[i], n.x + pad, n.y + pad + i * lineHeight);
+                            ctx!.fillText(lines[i], n.x + pad, n.y + pad + i * lineHeight);
                         }
                     }
                 }
             }
 
             // HUD（スクリーン座標に戻す）
-            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            ctx!.setTransform(dpr, 0, 0, dpr, 0, 0);
             // 右下にスケールと可視枚数
             const hudPad = 12;
             const hudText = `zoom ${(scale).toFixed(2)}  |  visible ${visibleCount}`;
-            ctx.font = `12px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace`;
-            const tw = ctx.measureText(hudText).width + 16;
+            ctx!.font = `12px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace`;
+            const tw = ctx!.measureText(hudText).width + 16;
             const th = 24;
-            ctx.fillStyle = "rgba(0,0,0,0.5)";
-            ctx.fillRect(cssW - tw - hudPad, cssH - th - hudPad, tw, th);
-            ctx.fillStyle = "white";
-            ctx.fillText(hudText, cssW - tw - hudPad + 8, cssH - th - hudPad + 6);
+            ctx!.fillStyle = "rgba(0,0,0,0.5)";
+            ctx!.fillRect(cssW - tw - hudPad, cssH - th - hudPad, tw, th);
+            ctx!.fillStyle = "white";
+            ctx!.fillText(hudText, cssW - tw - hudPad + 8, cssH - th - hudPad + 6);
 
 
-            setInfo((prev) => (prev.zoom !== scale || prev.visible !== visibleCount) ? { zoom: scale, visible: visibleCount } : prev);
         }
 
         function loop() {
