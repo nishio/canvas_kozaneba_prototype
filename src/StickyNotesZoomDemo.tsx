@@ -150,8 +150,10 @@ export default function StickyNotesZoomDemo() {
         let needRedraw = true;
 
         function fitToView() {
-            const cssW = parent!.clientWidth;
-            const cssH = parent!.clientHeight;
+            fitContainerToViewport();
+            const rect = parent!.getBoundingClientRect();
+            const cssW = Math.max(1, Math.round(rect.width));
+            const cssH = Math.max(1, Math.round(rect.height));
             const s = Math.min(cssW / WORLD_W, cssH / WORLD_H) * 0.92; // 少し余白
             MIN_ZOOM = s; // MIN_ZOOMを初期表示に合わせる
             targetScale = scale = s;
@@ -281,8 +283,9 @@ export default function StickyNotesZoomDemo() {
 
 
         function draw() {
-            const cssW = canvas!.width / dpr;
-            const cssH = canvas!.height / dpr;
+            const rect = parent!.getBoundingClientRect();
+            const cssW = Math.max(1, Math.round(rect.width));
+            const cssH = Math.max(1, Math.round(rect.height));
             // 背景
             ctx!.setTransform(dpr, 0, 0, dpr, 0, 0);
             ctx!.clearRect(0, 0, cssW, cssH);
@@ -409,12 +412,13 @@ export default function StickyNotesZoomDemo() {
             const hudPad = 12;
             const hudText = `zoom ${(scale).toFixed(2)}  |  visible ${visibleCount}`;
             ctx!.font = `12px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace`;
+            ctx!.textBaseline = "middle"; // HUD用のtextBaselineを設定
             const tw = ctx!.measureText(hudText).width + 16;
             const th = 24;
             ctx!.fillStyle = "rgba(0,0,0,0.5)";
             ctx!.fillRect(cssW - tw - hudPad, cssH - th - hudPad, tw, th);
             ctx!.fillStyle = "white";
-            ctx!.fillText(hudText, cssW - tw - hudPad + 8, cssH - th - hudPad + 6);
+            ctx!.fillText(hudText, cssW - tw - hudPad + 8, cssH - th - hudPad + th/2);
 
 
         }
