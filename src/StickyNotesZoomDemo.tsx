@@ -167,6 +167,7 @@ export default function StickyNotesZoomDemo() {
         // ======= ビュートランスフォーム =======
         let scale = 1, targetScale = 1; // world→screen 拡大率
         let tx = 0, ty = 0;             // world→screen 平行移動
+        let targetTx = 0, targetTy = 0; // 目標平行移動
         let dragging = false;
         let lastX = 0, lastY = 0;
         let rafId = 0;
@@ -180,6 +181,8 @@ export default function StickyNotesZoomDemo() {
             targetScale = scale = s;
             tx = (cssW - WORLD_W * scale) / 2;
             ty = (cssH - WORLD_H * scale) / 2;
+            targetTx = tx;
+            targetTy = ty;
             needRedraw = true;
         }
 
@@ -218,19 +221,19 @@ export default function StickyNotesZoomDemo() {
             const currentCenterX = cssW * 0.5;
             const currentCenterY = cssH * 0.5;
             const worldCenter = screenToWorld(currentCenterX, currentCenterY, scale, tx, ty);
-            
+
             const clampedScale = clamp(newScale, MIN_ZOOM, MAX_ZOOM);
             targetScale = clampedScale;
-            // 同じワールド座標が画面中央に来るように調整
-            tx = currentCenterX - worldCenter.x * clampedScale;
-            ty = currentCenterY - worldCenter.y * clampedScale;
+            // 同じワールド座標が画面中央に来るように調整（目標値を更新）
+            targetTx = currentCenterX - worldCenter.x * clampedScale;
+            targetTy = currentCenterY - worldCenter.y * clampedScale;
             needRedraw = true;
         };
         controlsRef.current.zoomIn = () => {
-            controlsRef.current.setZoomCenter(targetScale * 1.1);
+            controlsRef.current.setZoomCenter(targetScale * 2);
         };
         controlsRef.current.zoomOut = () => {
-            controlsRef.current.setZoomCenter(targetScale / 1.1);
+            controlsRef.current.setZoomCenter(targetScale / 2);
         };
 
         function onWheel(e: WheelEvent) {
@@ -248,10 +251,13 @@ export default function StickyNotesZoomDemo() {
             const newScale = clamp(scale * delta, MIN_ZOOM, MAX_ZOOM);
 
             // マウス位置を固定点として平行移動を調整
-            tx = mouseX - worldX * newScale;
-            ty = mouseY - worldY * newScale;
+            const newTx = mouseX - worldX * newScale;
+            const newTy = mouseY - worldY * newScale;
 
+            // ホイールは即座に反映（アニメーションなし）
             scale = targetScale = newScale;
+            tx = targetTx = newTx;
+            ty = targetTy = newTy;
             needRedraw = true;
         }
 
@@ -265,6 +271,7 @@ export default function StickyNotesZoomDemo() {
             const dx = e.clientX - lastX;
             const dy = e.clientY - lastY;
             tx += dx; ty += dy;
+            targetTx += dx; targetTy += dy; // 目標値も一緒に移動
             lastX = e.clientX; lastY = e.clientY;
             needRedraw = true;
         }
@@ -315,13 +322,21 @@ export default function StickyNotesZoomDemo() {
             ctx.fillStyle = "#fafafa";
             ctx.fillRect(0, 0, cssW, cssH);
 
-            // スムーズにtargetScaleへ補間
-            const diff = targetScale - scale;
-            if (Math.abs(diff) > 1e-4) {
-                scale += diff * 0.25; // より速いeasing
+            // スムーズに target* へ補間
+            const sDiff = targetScale - scale;
+            const xDiff = targetTx - tx;
+            const yDiff = targetTy - ty;
+
+            if (Math.abs(sDiff) > 1e-4 || Math.abs(xDiff) > 0.5 || Math.abs(yDiff) > 0.5) {
+                const k = 0.25; // easing 係数
+                scale += sDiff * k;
+                tx += xDiff * k;
+                ty += yDiff * k;
                 needRedraw = true;
             } else {
                 scale = targetScale;
+                tx = targetTx;
+                ty = targetTy;
             }
 
             // 可視ワールド矩形（カリング用）
@@ -335,7 +350,7 @@ export default function StickyNotesZoomDemo() {
 
             // テキスト表示判定（付箋のスクリーン上幅で判定）
             const screenNoteW = NOTE_SIZE * scale;
-            const showText = screenNoteW >= 100; // 40px以上でテキスト表示
+            const showText = screenNoteW >= 80;
 
             let visibleCount = 0;
 
