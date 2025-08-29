@@ -175,12 +175,38 @@ export default function StickyNotesClustersView() {
     }
     function onPointerUp(e: PointerEvent) { dragging = false; canvas!.releasePointerCapture(e.pointerId) }
     function onDblClick() { fitToView() }
+    function setZoomCenter(newScale: number) {
+      const rect = parent!.getBoundingClientRect()
+      const cssW = Math.max(1, Math.round(rect.width))
+      const cssH = Math.max(1, Math.round(rect.height))
+      const centerX = cssW * 0.5
+      const centerY = cssH * 0.5
+      const worldX = (centerX - tx) / scale
+      const worldY = (centerY - ty) / scale
+      const clamped = clamp(newScale, 0.001, 1.5)
+      targetScale = clamped
+      targetTx = centerX - worldX * clamped
+      targetTy = centerY - worldY * clamped
+      needRedraw = true
+    }
+    function zoomIn() { setZoomCenter(targetScale * 2) }
+    function zoomOut() { setZoomCenter(targetScale / 2) }
+    function onKey(e: KeyboardEvent) {
+      // Cmd+Up/Down/0 でズーム操作、Rでリセット
+      if (e.key === 'r' || e.key === 'R') { fitToView(); }
+      if (e.metaKey) {
+        if (e.key === 'ArrowUp') { e.preventDefault(); zoomIn(); }
+        else if (e.key === 'ArrowDown') { e.preventDefault(); zoomOut(); }
+        else if (e.key === '0') { e.preventDefault(); fitToView(); }
+      }
+    }
 
     canvas.addEventListener('wheel', onWheel, { passive: false })
     canvas.addEventListener('pointerdown', onPointerDown)
     globalThis.addEventListener('pointermove', onPointerMove)
     globalThis.addEventListener('pointerup', onPointerUp)
     canvas.addEventListener('dblclick', onDblClick)
+    globalThis.addEventListener('keydown', onKey)
     globalThis.addEventListener('resize', () => { resize(); needRedraw = true })
 
     function draw() {
@@ -340,6 +366,7 @@ export default function StickyNotesClustersView() {
       globalThis.removeEventListener('pointermove', onPointerMove)
       globalThis.removeEventListener('pointerup', onPointerUp)
       canvas.removeEventListener('dblclick', onDblClick)
+      globalThis.removeEventListener('keydown', onKey)
     }
   }, [clusters.length, clusterRender])
 

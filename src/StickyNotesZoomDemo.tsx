@@ -264,6 +264,19 @@ export default function StickyNotesZoomDemo() {
         }
         function onKey(e: KeyboardEvent) {
             if (e.key === "r" || e.key === "R") fitToView();
+            // Cmd+Up/Down/0 でズーム操作
+            if (e.metaKey) {
+                if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    controlsRef.current.zoomIn();
+                } else if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    controlsRef.current.zoomOut();
+                } else if (e.key === '0') {
+                    e.preventDefault();
+                    fitToView();
+                }
+            }
         }
 
         canvas!.addEventListener("wheel", onWheel, { passive: false });
