@@ -11,7 +11,7 @@ export default function StickyNotesClustersView() {
   const [busy, setBusy] = useState(false)
   const [jsonOpen, setJsonOpen] = useState(false)
   const [precomputedLoaded, setPrecomputedLoaded] = useState(false)
-  const [clusterRender, setClusterRender] = useState<'outline' | 'sticky'>('outline')
+  const [clusterRender, setClusterRender] = useState<'outline' | 'sticky'>('sticky')
 
   useEffect(() => {
     const canvas = canvasRef.current
