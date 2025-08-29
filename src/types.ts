@@ -24,3 +24,15 @@ export interface Note {
   gridX: number;
   gridY: number;
 }
+
+export interface ClusterRect {
+  x: number; y: number; w: number; h: number;
+}
+
+export interface ClusterSummary {
+  id: string;
+  rect: ClusterRect;
+  noteIds: string[];
+  texts: string[];
+  summary?: string;
+}

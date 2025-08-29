@@ -1,11 +1,13 @@
 import StickyNotesZoomDemo from './StickyNotesZoomDemo'
 import StickyNotesSelectDemo from './StickyNotesSelectDemo'
+import StickyNotesClustersView from './StickyNotesClustersView'
 import { useEffect, useState } from 'react'
 
 function App() {
   // 依存ライブラリなしの超軽量ルーティング
   // 既存: "/" はそのまま StickyNotesZoomDemo
   // 追加: "/select" または "#/select" で StickyNotesSelectDemo
+  // 追加: "/clusters" または "#/clusters" で クラスタ抽出+要約ビュー
   const getPath = () => {
     if (typeof window === 'undefined') return '/'
     const hash = window.location.hash
@@ -25,6 +27,7 @@ function App() {
   }, [])
 
   if (path === '/select') return <StickyNotesSelectDemo />
+  if (path === '/clusters') return <StickyNotesClustersView />
   return <StickyNotesZoomDemo />
 }
 

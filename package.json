@@ -8,7 +8,8 @@
     "build": "tsc && vite build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "typecheck": "tsc --noEmit",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "precompute:clusters": "node scripts/precompute_clusters.js --min-size=10"
   },
   "dependencies": {
     "react": "^18.2.0",
