@@ -144,10 +144,10 @@ export default function StickyNotesClustersView() {
       const rect = parent!.getBoundingClientRect()
       const cssW = Math.max(1, Math.round(rect.width))
       const cssH = Math.max(1, Math.round(rect.height))
-      canvas.width = Math.max(1, Math.round(cssW * dpr))
-      canvas.height = Math.max(1, Math.round(cssH * dpr))
-      canvas.style.width = `${cssW}px`
-      canvas.style.height = `${cssH}px`
+      canvas!.width = Math.max(1, Math.round(cssW * dpr))
+      canvas!.height = Math.max(1, Math.round(cssH * dpr))
+      canvas!.style.width = `${cssW}px`
+      canvas!.style.height = `${cssH}px`
       needRedraw = true
     }
     resize(); fitToView()
@@ -349,8 +349,8 @@ export default function StickyNotesClustersView() {
       const tw = ctx!.measureText(hud).width + 16
       const th = 24
       ctx!.fillStyle = 'rgba(0,0,0,0.5)'
-      const rectX = Math.max(8, canvas.width / dpr - tw - 12)
-      const rectY = Math.max(8, canvas.height / dpr - th - 12)
+      const rectX = Math.max(8, canvas!.width / dpr - tw - 12)
+      const rectY = Math.max(8, canvas!.height / dpr - th - 12)
       ctx!.fillRect(rectX, rectY, tw, th)
       ctx!.fillStyle = 'white'
       ctx!.fillText(hud, rectX + 8, rectY + th / 2)
@@ -361,11 +361,11 @@ export default function StickyNotesClustersView() {
 
     return () => {
       cancelAnimationFrame(rafId)
-      canvas.removeEventListener('wheel', onWheel)
-      canvas.removeEventListener('pointerdown', onPointerDown)
+      canvas!.removeEventListener('wheel', onWheel)
+      canvas!.removeEventListener('pointerdown', onPointerDown)
       globalThis.removeEventListener('pointermove', onPointerMove)
       globalThis.removeEventListener('pointerup', onPointerUp)
-      canvas.removeEventListener('dblclick', onDblClick)
+      canvas!.removeEventListener('dblclick', onDblClick)
       globalThis.removeEventListener('keydown', onKey)
     }
   }, [clusters.length, clusterRender])
