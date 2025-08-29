@@ -143,7 +143,9 @@ async function main() {
   const raw = await fs.readFile(inPath, 'utf-8')
   const data = JSON.parse(raw)
   const { notes, world } = distributeNotes(data.arguments)
-  const clusters = extractConnectedClusters(notes, args.minSize)
+  let clusters = extractConnectedClusters(notes, args.minSize)
+  // オーバーラップ解消と正方形化
+  clusters = normalizeNonOverlapping(clusters)
 
   const useOR = args.useOpenRouter || !!process.env.OPENROUTER_API_KEY
   const apiKey = process.env.OPENROUTER_API_KEY
@@ -169,6 +171,65 @@ async function main() {
 }
 
 main().catch(err => { console.error(err); process.exit(1) })
+
+// ===== Cluster post-processing utilities =====
+function rectOverlap(a, b) {
+  const ax2 = a.rect.x + a.rect.w, ay2 = a.rect.y + a.rect.h
+  const bx2 = b.rect.x + b.rect.w, by2 = b.rect.y + b.rect.h
+  return a.rect.x < bx2 && ax2 > b.rect.x && a.rect.y < by2 && ay2 > b.rect.y
+}
+function mergeTwo(a, b) {
+  const minx = Math.min(a.rect.x, b.rect.x)
+  const miny = Math.min(a.rect.y, b.rect.y)
+  const maxx = Math.max(a.rect.x + a.rect.w, b.rect.x + b.rect.w)
+  const maxy = Math.max(a.rect.y + a.rect.h, b.rect.y + b.rect.h)
+  return {
+    id: `${a.id}+${b.id}`,
+    rect: { x: minx, y: miny, w: maxx - minx, h: maxy - miny },
+    noteIds: [...new Set([...a.noteIds, ...b.noteIds])],
+    texts: [...a.texts, ...b.texts],
+  }
+}
+function mergeOverlaps(clusters) {
+  const list = [...clusters]
+  let i = 0
+  while (i < list.length) {
+    let merged = false
+    for (let j = i + 1; j < list.length; j++) {
+      if (rectOverlap(list[i], list[j])) {
+        const m = mergeTwo(list[i], list[j])
+        list.splice(j, 1)
+        list[i] = m
+        merged = true
+        break
+      }
+    }
+    if (!merged) i++
+  }
+  return list
+}
+function squareize(c) {
+  const side = Math.max(c.rect.w, c.rect.h)
+  const cx = c.rect.x + c.rect.w / 2
+  const cy = c.rect.y + c.rect.h / 2
+  const x = cx - side / 2
+  const y = cy - side / 2
+  return { ...c, rect: { x, y, w: side, h: side } }
+}
+function normalizeNonOverlapping(clusters) {
+  let list = clusters
+  let prevLen = -1
+  for (let iter = 0; iter < 8; iter++) {
+    list = mergeOverlaps(list)
+    const lenAfterMerge = list.length
+    list = list.map(squareize)
+    const afterSquareMerge = mergeOverlaps(list)
+    list = afterSquareMerge
+    if (list.length === prevLen && list.length === lenAfterMerge) break
+    prevLen = list.length
+  }
+  return list
+}
 
 // OpenRouter 経由で LLM 要約を作成。JSON文字列を返す。
 async function summarizeWithOpenRouter(texts, { model, apiKey, maxTokens }) {

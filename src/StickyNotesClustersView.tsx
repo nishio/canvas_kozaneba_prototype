@@ -92,7 +92,8 @@ export default function StickyNotesClustersView() {
 
         // クラスタ抽出を関数化（UIから呼ぶ／事前計算が無い時用）
         ;(globalThis as any).__extractClusters__ = async (minSize: number) => {
-          const clusters = extractConnectedClusters(notes, minSize)
+          const base = extractConnectedClusters(notes, minSize)
+          const clusters = normalizeNonOverlapping(base)
           // 要約は非同期で順次付与
           setBusy(true)
           try {
@@ -511,4 +512,63 @@ function extractConnectedClusters(notes: Note[], minSize: number): ClusterSummar
     }
   }
   return clusters
+}
+
+// === Overlap merge + squareize ===
+function rectOverlap(a: ClusterSummary, b: ClusterSummary): boolean {
+  const ax2 = a.rect.x + a.rect.w, ay2 = a.rect.y + a.rect.h
+  const bx2 = b.rect.x + b.rect.w, by2 = b.rect.y + b.rect.h
+  return a.rect.x < bx2 && ax2 > b.rect.x && a.rect.y < by2 && ay2 > b.rect.y
+}
+function mergeTwo(a: ClusterSummary, b: ClusterSummary): ClusterSummary {
+  const minx = Math.min(a.rect.x, b.rect.x)
+  const miny = Math.min(a.rect.y, b.rect.y)
+  const maxx = Math.max(a.rect.x + a.rect.w, b.rect.x + b.rect.w)
+  const maxy = Math.max(a.rect.y + a.rect.h, b.rect.y + b.rect.h)
+  return {
+    id: `${a.id}+${b.id}`,
+    rect: { x: minx, y: miny, w: maxx - minx, h: maxy - miny },
+    noteIds: Array.from(new Set([...(a.noteIds||[]), ...(b.noteIds||[])])),
+    texts: [...(a.texts||[]), ...(b.texts||[])],
+  }
+}
+function mergeOverlaps(clusters: ClusterSummary[]): ClusterSummary[] {
+  const list = [...clusters]
+  let i = 0
+  while (i < list.length) {
+    let merged = false
+    for (let j = i + 1; j < list.length; j++) {
+      if (rectOverlap(list[i], list[j])) {
+        const m = mergeTwo(list[i], list[j])
+        list.splice(j, 1)
+        list[i] = m
+        merged = true
+        break
+      }
+    }
+    if (!merged) i++
+  }
+  return list
+}
+function squareize(c: ClusterSummary): ClusterSummary {
+  const side = Math.max(c.rect.w, c.rect.h)
+  const cx = c.rect.x + c.rect.w / 2
+  const cy = c.rect.y + c.rect.h / 2
+  const x = cx - side / 2
+  const y = cy - side / 2
+  return { ...c, rect: { x, y, w: side, h: side } }
+}
+function normalizeNonOverlapping(clusters: ClusterSummary[]): ClusterSummary[] {
+  let list = clusters
+  let prevLen = -1
+  for (let iter = 0; iter < 8; iter++) {
+    list = mergeOverlaps(list)
+    const lenAfterMerge = list.length
+    list = list.map(squareize)
+    const afterSquareMerge = mergeOverlaps(list)
+    list = afterSquareMerge
+    if (list.length === prevLen && list.length === lenAfterMerge) break
+    prevLen = list.length
+  }
+  return list
 }
