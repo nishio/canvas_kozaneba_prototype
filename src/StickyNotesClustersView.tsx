@@ -273,6 +273,14 @@ export default function StickyNotesClustersView() {
           ctx!.strokeRect(x, y, w, h)
         }
       } else {
+        // 通常付箋の文字が見えるズーム閾値では、グループ付箋は非表示
+        if (screenNoteW >= 80) {
+          // 何も描画しない（下の通常付箋のテキストを優先）
+          ctx!.restore()
+          // HUD 描画に戻る
+          ctx!.setTransform(scale * dpr, 0, 0, scale * dpr, tx * dpr, ty * dpr)
+          // fallthrough to HUD section below
+        } else {
         for (const c of clusters) {
           const x = c.rect.x * scale + tx
           const y = c.rect.y * scale + ty
@@ -292,13 +300,17 @@ export default function StickyNotesClustersView() {
             const fontPx = Math.max(12, Math.min(28, 18))
             ctx!.font = `bold ${fontPx}px ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto`
             ctx!.textBaseline = 'top'
-            const lines = wrapByMeasure(ctx!, title, maxW, 2)
+            // 高さに入る限り可能な行数まで描画（0行の可能性も許容）
+            const lineHeight = Math.round(fontPx * 1.2)
+            const maxLines = Math.max(0, Math.floor((h - pad * 2) / lineHeight))
+            const lines = wrapByMeasure(ctx!, title, maxW, maxLines)
             for (let i = 0; i < lines.length; i++) {
               const ty = y + pad + i * Math.round(fontPx * 1.2)
               if (ty > y + h - pad) break
               ctx!.fillText(lines[i], x + pad, ty)
             }
           }
+        }
         }
       }
       ctx!.restore()
@@ -405,15 +417,23 @@ function extractTitleFromSummary(summary?: string): string | null {
 // 日本語向けに文字単位で計測し、maxLines まで折り返す。最終行は省略記号。
 function wrapByMeasure(ctx: CanvasRenderingContext2D, text: string, maxW: number, maxLines: number): string[] {
   const out: string[] = []
+  if (maxLines <= 0) return out
+  const ell = '…'
+  if (ctx.measureText(ell).width > maxW) return out // 省略記号すら置けない幅は描画しない
+
   let line = ''
   for (const ch of text) {
     const test = line + ch
     if (ctx.measureText(test).width <= maxW) {
       line = test
     } else {
-      if (line) out.push(line)
-      else out.push(ch)
-      line = ''
+      if (line) {
+        out.push(line)
+        line = ''
+      } else {
+        // 1文字も入らない行→描画せず終了
+        return []
+      }
       if (out.length >= maxLines) break
       line = ch
     }
@@ -422,10 +442,11 @@ function wrapByMeasure(ctx: CanvasRenderingContext2D, text: string, maxW: number
   if (out.length < maxLines && line) out.push(line)
   if (out.length > maxLines) out.length = maxLines
   if (out.length === maxLines) {
-    // 省略記号
+    // 省略記号（入らない場合は描画中止）
     let last = out[out.length - 1]
-    while (ctx.measureText(last + '…').width > maxW && last.length > 0) last = last.slice(0, -1)
-    out[out.length - 1] = last + '…'
+    while (ctx.measureText(last + ell).width > maxW && last.length > 0) last = last.slice(0, -1)
+    if (!last) return out.slice(0, -1) // 省略しても1文字も置けないなら行ごと削除
+    out[out.length - 1] = last + ell
   }
   return out
 }
